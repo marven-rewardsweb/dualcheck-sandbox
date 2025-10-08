@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    name: Go Backend Checks
+    runs-on: ubuntu-latest
+    # Solo corre si hay cambios en backend o en el workflow
+    if: ${{ contains(join(github.event.pull_request.changed_files, ','), '.github/workflows/ci.yml') || !github.event.pull_request || github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+
+      - name: Go fmt (fails if files need formatting)
+        working-directory: backend
+        run: |
+          fmt_out=$(gofmt -l .)
+          if [ -n "$fmt_out" ]; then
+            echo "Files not formatted:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: Go vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: Go build
+        working-directory: backend
+        run: go build ./...
+
+  ts:
+    name: TypeScript Frontend Typecheck (pnpm)
+    runs-on: ubuntu-latest
+    # Solo corre si hay cambios en frontend o en el workflow
+    if: ${{ contains(join(github.event.pull_request.changed_files, ','), 'frontend/') || contains(join(github.event.pull_request.changed_files, ','), '.github/workflows/ci.yml') || !github.event.pull_request || github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Instala pnpm (v9 recomendado)
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: frontend
+        run: pnpm run typecheck
