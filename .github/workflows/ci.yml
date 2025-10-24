@@ -2,14 +2,16 @@ name: CI
 
 on:
   push:
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
   go:
     name: Go Backend Checks
     runs-on: ubuntu-latest
     # Solo corre si hay cambios en backend o en el workflow
-    if: ${{ contains(join(github.event.pull_request.changed_files, ','), '.github/workflows/ci.yml') || !github.event.pull_request || github.event_name == 'push' }}
+    if: ${{ contains(join(github.event.pull_request.changed_files, ','), 'backend/') || contains(join(github.event.pull_request.changed_files, ','), '.github/workflows/ci.yml') || !github.event.pull_request || github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v4
 
