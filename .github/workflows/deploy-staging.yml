@@ -10,7 +10,7 @@ on:
 jobs:
   # Detectar cambios en archivos para filtrar deployments
   changes:
-    name: "${{ github.event.workflow_run.head_commit.message }} (#${{ github.run_number }} - ${{ github.event.workflow_run.head_sha }} by ${{ github.event.workflow_run.head_commit.author.name }})"
+    name: Detect Changes
     runs-on: ubuntu-latest
     # Solo ejecutar si CI fue exitoso
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -19,8 +19,6 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -31,14 +29,12 @@ jobs:
               - 'frontend/**'
 
   deploy-frontend-staging:
-    name: "Deploy Frontend: ${{ github.event.workflow_run.head_commit.message }}"
+    name: Deploy Frontend to Vercel Staging
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.frontend == 'true' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -71,20 +67,18 @@ jobs:
 
       - name: Deploy to Staging
         working-directory: frontend
-        run: vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.event.workflow_run.head_sha }}" --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
   deploy-backend-staging:
-    name: "Deploy Backend: ${{ github.event.workflow_run.head_commit.message }}"
+    name: Deploy Backend to Railway Staging
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.backend == 'true' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
@@ -93,6 +87,3 @@ jobs:
         run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_DEPLOYMENT_COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
-          RAILWAY_DEPLOYMENT_COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
-          RAILWAY_DEPLOYMENT_COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
