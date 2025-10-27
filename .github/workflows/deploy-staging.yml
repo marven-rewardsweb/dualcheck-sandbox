@@ -36,6 +36,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get commit info
+        id: commit
+        run: |
+          echo "message=$(git log -1 --pretty=%B | head -n 1)" >> $GITHUB_OUTPUT
+          echo "sha=$(git log -1 --pretty=%h)" >> $GITHUB_OUTPUT
+          echo "author=$(git log -1 --pretty=%an)" >> $GITHUB_OUTPUT
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -67,7 +74,14 @@ jobs:
 
       - name: Deploy to Staging
         working-directory: frontend
-        run: vercel deploy --prebuilt --target=staging --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          echo "🚀 Deploying commit: ${{ steps.commit.outputs.sha }} - ${{ steps.commit.outputs.message }}"
+          echo "👤 Author: ${{ steps.commit.outputs.author }}"
+          vercel deploy --prebuilt --target=staging \
+            --meta gitCommitSha="${{ steps.commit.outputs.sha }}" \
+            --meta gitCommitMessage="${{ steps.commit.outputs.message }}" \
+            --meta gitCommitAuthor="${{ steps.commit.outputs.author }}" \
+            --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -80,10 +94,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get commit info
+        id: commit
+        run: |
+          echo "message=$(git log -1 --pretty=%B | head -n 1)" >> $GITHUB_OUTPUT
+          echo "sha=$(git log -1 --pretty=%h)" >> $GITHUB_OUTPUT
+          echo "author=$(git log -1 --pretty=%an)" >> $GITHUB_OUTPUT
+
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
       - name: Deploy to Railway Staging
-        run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging
+        run: |
+          echo "🚀 Deploying commit: ${{ steps.commit.outputs.sha }} - ${{ steps.commit.outputs.message }}"
+          echo "👤 Author: ${{ steps.commit.outputs.author }}"
+          railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
