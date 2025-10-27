@@ -1,19 +1,14 @@
-name: Deploy to Staging
+name: Deploy to Production
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
-    branches: [ main ]
+  release:
+    types: [published]
 
 jobs:
   # Detectar cambios en archivos para filtrar deployments
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
-    # Solo ejecutar si CI fue exitoso
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
@@ -28,8 +23,8 @@ jobs:
             frontend:
               - 'frontend/**'
 
-  deploy-frontend-staging:
-    name: Deploy Frontend to Vercel Staging
+  deploy-frontend-production:
+    name: Deploy Frontend to Vercel Production
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.frontend == 'true' }}
@@ -53,38 +48,38 @@ jobs:
 
       - name: Pull Vercel Environment Information
         working-directory: frontend
-        run: vercel pull --yes --environment=staging --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Build Project Artifacts
         working-directory: frontend
-        run: vercel build --target=staging --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Deploy to Staging
+      - name: Deploy to Production
         working-directory: frontend
-        run: vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --prod --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-  deploy-backend-staging:
-    name: Deploy Backend to Railway Staging
+  deploy-backend-production:
+    name: Deploy Backend to Railway Production
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.backend == 'true' }}
-    environment: staging
+    environment: production
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Deploy to Railway Staging
-        run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging
+      - name: Deploy to Railway Production
+        run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
