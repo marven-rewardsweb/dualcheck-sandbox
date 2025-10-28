@@ -5,29 +5,9 @@ on:
     types: [published]
 
 jobs:
-  # Detectar cambios en archivos para filtrar deployments
-  changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'backend/**'
-            frontend:
-              - 'frontend/**'
-
   deploy-frontend-production:
     name: Deploy Frontend to Vercel Production
     runs-on: ubuntu-latest
-    needs: changes
-    if: ${{ needs.changes.outputs.frontend == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -70,8 +50,6 @@ jobs:
   deploy-backend-production:
     name: Deploy Backend to Railway Production
     runs-on: ubuntu-latest
-    needs: changes
-    if: ${{ needs.changes.outputs.backend == 'true' }}
     environment: production
     steps:
       - uses: actions/checkout@v4
