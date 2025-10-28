@@ -4,10 +4,18 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy-frontend-production:
     name: Deploy Frontend to Vercel Production
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -26,22 +34,34 @@ jobs:
       - name: Install Vercel CLI
         run: pnpm install -g vercel@48.6.0
 
-      - name: Get Current Staging Deployment
-        id: get_staging
+      - name: Pull Vercel Environment Information
         working-directory: frontend
-        run: |
-          STAGING_URL=$(vercel alias ls --token=${{ secrets.VERCEL_TOKEN }} --scope=${{ secrets.VERCEL_ORG_ID }} | grep "${{ secrets.VERCEL_STAGING_ALIAS }}" | awk '{print $2}')
-          echo "url=$STAGING_URL" >> $GITHUB_OUTPUT
-          echo "Promoting from staging: $STAGING_URL"
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Promote Staging to Production
+      - name: Build Project Artifacts
+        working-directory: frontend
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Production
+        id: deploy
         working-directory: frontend
         run: |
-          vercel promote ${{ steps.get_staging.outputs.url }} --token=${{ secrets.VERCEL_TOKEN }} --scope=${{ secrets.VERCEL_ORG_ID }} --yes
-          echo "Production deployment complete!"
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }})
+          echo "::add-mask::$DEPLOYMENT_URL"
+          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Alias to Production Domain
+        working-directory: frontend
+        run: vercel alias set ${{ steps.deploy.outputs.url }} --scope=${{ secrets.VERCEL_ORG_ID }} --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -49,12 +69,13 @@ jobs:
   deploy-backend-production:
     name: Deploy Backend to Railway Production
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: production
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: npm install -g @railway/cli@3.17.7
 
       - name: Deploy to Railway Production
         run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=production --detach

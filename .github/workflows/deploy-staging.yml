@@ -7,11 +7,19 @@ on:
       - completed
     branches: [ main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Detectar cambios en archivos para filtrar deployments
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     # Solo ejecutar si CI fue exitoso
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
@@ -31,6 +39,7 @@ jobs:
   deploy-frontend-staging:
     name: Deploy Frontend to Vercel Staging
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: changes
     if: ${{ needs.changes.outputs.frontend == 'true' }}
     steps:
@@ -51,22 +60,34 @@ jobs:
       - name: Install Vercel CLI
         run: pnpm install -g vercel@48.6.0
 
-      - name: Deploy Preview to Staging Domain
-        id: deploy
+      - name: Pull Vercel Environment Information
         working-directory: frontend
-        run: |
-          DEPLOYMENT_URL=$(vercel deploy --build-env NEXT_PUBLIC_ENV=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
-          echo "Deployed to: $DEPLOYMENT_URL"
+        run: vercel pull --yes --environment=staging --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Assign to Staging Domain
+      - name: Build Project Artifacts
+        working-directory: frontend
+        run: vercel build --target=staging --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Staging
+        id: deploy
         working-directory: frontend
         run: |
-          vercel alias set ${{ steps.deploy.outputs.url }} ${{ secrets.VERCEL_STAGING_ALIAS }} --scope=${{ secrets.VERCEL_ORG_ID }} --token=${{ secrets.VERCEL_TOKEN }}
-          echo "Staging available at: ${{ secrets.VERCEL_STAGING_ALIAS }}"
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }})
+          echo "::add-mask::$DEPLOYMENT_URL"
+          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Promote to Staging
+        working-directory: frontend
+        run: vercel promote ${{ steps.deploy.outputs.url }} --scope=${{ secrets.VERCEL_ORG_ID }} --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -74,6 +95,7 @@ jobs:
   deploy-backend-staging:
     name: Deploy Backend to Railway Staging
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: changes
     if: ${{ needs.changes.outputs.backend == 'true' }}
     environment: staging
@@ -81,7 +103,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: npm install -g @railway/cli@3.17.7
 
       - name: Deploy to Railway Staging
         run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging --detach
