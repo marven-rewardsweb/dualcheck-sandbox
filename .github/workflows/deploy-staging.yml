@@ -66,8 +66,18 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Deploy to Staging
+        id: deploy
         working-directory: frontend
-        run: vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Promote to Staging
+        working-directory: frontend
+        run: vercel promote ${{ steps.deploy.outputs.url }} --scope=${{ secrets.VERCEL_ORG_ID }} --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -85,6 +95,6 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Railway Staging
-        run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging
+        run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

@@ -14,7 +14,7 @@ async function ping(baseUrl = "http://localhost:8080"): Promise<PingResponse> {
     ) {
         return data as PingResponse;
     }
-    throw new Error("Invalid response");
+    throw new Error("Invalid response error");
 }
 
 // Ejecutar si se llama directamente con `node --loader ts-node/esm` o solo para type-check:

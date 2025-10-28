@@ -41,8 +41,18 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Deploy to Production
+        id: deploy
         working-directory: frontend
-        run: vercel deploy --prebuilt --prod --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Alias to Production Domain
+        working-directory: frontend
+        run: vercel alias set ${{ steps.deploy.outputs.url }} --scope=${{ secrets.VERCEL_ORG_ID }} --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -58,6 +68,6 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Railway Production
-        run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=production
+        run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=production --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
