@@ -1,7 +1,7 @@
 type PingResponse = { message: string };
 
 async function ping(baseUrl = "http://localhost:8080"): Promise<PingResponse> {
-    const res = await fetch(`${baseUrl}/api/ping`);
+    const res = await fetch(`${baseUrl}/api/v1/ping`);
     if (!res.ok) throw new Error(`Request failed: ${res.status}`);
     const data = (await res.json()) as unknown;
 
