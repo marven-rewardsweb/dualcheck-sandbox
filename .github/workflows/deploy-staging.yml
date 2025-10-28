@@ -69,15 +69,15 @@ jobs:
         id: deploy
         working-directory: frontend
         run: |
-          DEPLOYMENT_URL=$(vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }})
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }})
           echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Promote to Staging
+      - name: Assign Staging Alias
         working-directory: frontend
-        run: vercel promote ${{ steps.deploy.outputs.url }} --scope=${{ secrets.VERCEL_ORG_ID }} --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel alias set ${{ steps.deploy.outputs.url }} ${{ secrets.VERCEL_STAGING_ALIAS }} --scope=${{ secrets.VERCEL_ORG_ID }} --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
