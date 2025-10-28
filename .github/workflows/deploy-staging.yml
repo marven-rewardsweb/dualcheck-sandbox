@@ -75,8 +75,46 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Deploy to Staging
+        id: deploy
         working-directory: frontend
-        run: vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --target=staging --meta gitCommitSha="${{ github.sha }}" --token=${{ secrets.VERCEL_TOKEN }})
+          echo "::add-mask::$DEPLOYMENT_URL"
+          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          echo "Deployed to: $DEPLOYMENT_URL"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Verify Deployment Status
+        working-directory: frontend
+        run: |
+          max_attempts=20
+          attempt=0
+          deployment_url="${{ steps.deploy.outputs.url }}"
+
+          echo "Verifying deployment status: $deployment_url"
+
+          while [ $attempt -lt $max_attempts ]; do
+            echo "Attempt $((attempt + 1))/$max_attempts - Checking deployment status..."
+
+            status=$(vercel inspect "$deployment_url" --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || echo "error")
+
+            if echo "$status" | grep -q "READY"; then
+              echo "✅ Deployment is READY!"
+              exit 0
+            elif echo "$status" | grep -q "ERROR"; then
+              echo "❌ Deployment failed with ERROR status"
+              exit 1
+            fi
+
+            echo "Status: Building... waiting..."
+            attempt=$((attempt + 1))
+            sleep 10
+          done
+
+          echo "❌ Deployment verification timed out after $max_attempts attempts"
+          exit 1
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -95,6 +133,39 @@ jobs:
         run: npm install -g @railway/cli@4.11.0
 
       - name: Deploy to Railway Staging
-        run: railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging --detach
+        id: railway_deploy
+        run: |
+          echo "Starting Railway deployment..."
+          railway up --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging --detach
+          echo "Deployment triggered, waiting for status..."
+          sleep 10
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Check Deployment Status
+        run: |
+          max_attempts=30
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            status=$(railway status --service=${{ secrets.RAILWAY_SERVICE_NAME }} --environment=staging --json 2>/dev/null || echo '{"status":"unknown"}')
+            deployment_status=$(echo "$status" | jq -r '.latestDeployment.status // "unknown"')
+
+            echo "Attempt $((attempt + 1))/$max_attempts - Deployment status: $deployment_status"
+
+            if [ "$deployment_status" = "SUCCESS" ] || [ "$deployment_status" = "ACTIVE" ]; then
+              echo "✅ Deployment successful!"
+              exit 0
+            elif [ "$deployment_status" = "FAILED" ] || [ "$deployment_status" = "CRASHED" ]; then
+              echo "❌ Deployment failed with status: $deployment_status"
+              exit 1
+            fi
+
+            attempt=$((attempt + 1))
+            sleep 10
+          done
+
+          echo "⏱️ Deployment status check timed out after $((max_attempts * 10)) seconds"
+          exit 1
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
