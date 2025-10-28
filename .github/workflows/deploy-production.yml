@@ -30,7 +30,7 @@ jobs:
         id: get_staging
         working-directory: frontend
         run: |
-          STAGING_URL=$(vercel alias ls --token=${{ secrets.VERCEL_TOKEN }} --scope=${{ secrets.VERCEL_ORG_ID }} | grep "${{ secrets.VERCEL_STAGING_ALIAS }}" | awk '{print $NF}')
+          STAGING_URL=$(vercel alias ls --token=${{ secrets.VERCEL_TOKEN }} --scope=${{ secrets.VERCEL_ORG_ID }} | grep "${{ secrets.VERCEL_STAGING_ALIAS }}" | awk '{print $2}')
           echo "url=$STAGING_URL" >> $GITHUB_OUTPUT
           echo "Promoting from staging: $STAGING_URL"
         env:
